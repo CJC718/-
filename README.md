@@ -181,4 +181,28 @@ def shell_sort(alist):
                     break
         gap //= 2
 ```
+#### 字符串算法
+##旋转字符串
+
+给定字符串，要求把字符串前面若干个字符移动到字符串尾部。要求时间复杂度O(n)，空间复杂度O(1)。
+如：'abcdefg'前面的2个字符'a'和'b'移到字符串尾部，就是'cdefgab'。
+```
+def left_shift_one(s):
+    slist = list(s)
+    temp = slist[0]
+    for i in range(1, len(s)):
+        slist[i - 1] = slist[i]
+    slist[len(s) - 1] = temp
+    s = ''.join(slist)
+    return s
+
+
+def left_rotate_str(s, n):
+    while n > 0:
+        s = left_shift_one(s)
+        n -= 1
+    return s
+```
+## 字符串包含 
+给定一长一短的两个字符串A，B，假设A长B短，要求判断B是否包含在字符串A中
     
