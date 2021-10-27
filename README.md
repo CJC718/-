@@ -613,3 +613,162 @@ class Solution(object):
                 result2^=i
         return [result1,result2]
 ```
+## 非极大值抑制 ##
+
+```
+import numpy as np
+def py_nms(dets, thresh):
+    """Pure Python NMS baseline."""
+    # x1、y1、x2、y2、以及score赋值
+    x1 = dets[:, 0]
+    y1 = dets[:, 1]
+    x2 = dets[:, 2]
+    y2 = dets[:, 3]
+    scores = dets[:, 4]
+    # 每一个候选框的面积
+    areas = (x2 - x1 + 1) * (y2 - y1 + 1)
+    # order是按照score降序排序的
+    order = scores.argsort()[::-1]
+
+    keep = []
+    while order.size > 0:
+        i = order[0]
+        keep.append(i)
+        # 计算当前概率最大矩形框与其他矩形框的相交框的坐标，会用到numpy的broadcast机制，得到的是向量
+        xx1 = np.maximum(x1[i], x1[order[1:]])
+        yy1 = np.maximum(y1[i], y1[order[1:]])
+        xx2 = np.minimum(x2[i], x2[order[1:]])
+        yy2 = np.minimum(y2[i], y2[order[1:]])
+
+        # 计算相交框的面积,注意矩形框不相交时w或h算出来会是负数，用0代替
+        w = np.maximum(0.0, xx2 - xx1 + 1)
+        h = np.maximum(0.0, yy2 - yy1 + 1)
+        inter = w * h
+        # 计算重叠度IOU：重叠面积/（面积1+面积2-重叠面积）
+        ovr = inter / (areas[i] + areas[order[1:]] - inter)
+
+        # 找到重叠度不高于阈值的矩形框索引
+        inds = np.where(ovr <= thresh)[0]
+        # 将order序列更新，由于前面得到的矩形框索引要比矩形框在原order序列中的索引小1，所以要把这个1加回来
+        order = order[inds + 1]
+    return keep
+# test
+if __name__ == "__main__":
+    dets = np.array([[30, 20, 230, 200, 1],
+                     [50, 50, 260, 220, 0.9],
+                     [210, 30, 420, 5, 0.8],
+                     [430, 280, 460, 360, 0.7]])
+    thresh = 0.35
+    keep_dets = py_nms(dets, thresh)
+    print(keep_dets)
+    print(dets[keep_dets])
+    
+   
+```
+## kMeans ##
+
+所以 K-means 的算法步骤为：
+
+选择初始化的 k 个样本作为初始聚类中心 [公式] ；
+针对数据集中每个样本 [公式] 计算它到 k 个聚类中心的距离并将其分到距离最小的聚类中心所对应的类中；
+针对每个类别 [公式] ，重新计算它的聚类中心 [公式] （即属于该类的所有样本的质心）；
+重复上面 2 3 两步操作，直到达到某个中止条件（迭代次数、最小误差变化等）。
+```
+from numpy import *
+from sklearn.datasets import load_iris
+
+def distEclud(vecA,vecB):
+    return sqrt(sum(power(vecA-vecB,2)))
+
+def randCent(dataSet,k):
+    n = shape(dataSet)[1]
+    centroids = mat(zeros((k,n)))
+    for j in range(n):
+        minJ = min(dataSet[:,j])
+        maxJ = max(dataSet[:,j])
+        rangeJ = float(maxJ-minJ)
+        centroids[:,j] = minJ + rangeJ* random.rand(k,1)
+    return centroids
+
+def kMeans(dataSet,k,distMeas = distEclud,createCent = randCent):
+    m = shape(dataSet)[0]
+    clusterAssment = mat(zeros((m,2)))
+    centroids = createCent(dataSet, k)
+    clusterChanged = True
+    while clusterChanged:
+        clusterChanged = False
+        for i in range(m):
+            minDist = inf
+            minIndex = -1
+            for j in range(k):
+                distJI = distMeas(centroids[j,:],dataSet[i,:])
+                if distJI < minDist:
+                    minDist = distJI
+                    minIndex = j
+            if clusterAssment[i,0] != minIndex:
+                clusterChanged = True
+
+            clusterAssment[i,:] = minIndex,minDist**2
+        print(centroids)
+
+        for cent in range(k):
+            ptsInClust = dataSet[nonzero(clusterAssment[:,0].A==cent)[0]]
+
+            centroids[cent,:] = mean(ptsInClust,axis=0)
+
+    return centroids,clusterAssment
+
+
+iris = load_iris()
+X = iris.data[:]
+myCentroids,clustAssing = kMeans(X,4)
+print (myCentroids)
+print (clustAssing)
+
+```
+## 计算Iou ##
+```
+def calIOU_V1(rec1, rec2):
+    """
+    computing IoU
+    :param rec1: (y0, x0, y1, x1), which reflects
+            (top, left, bottom, right)
+    :param rec2: (y0, x0, y1, x1)
+    :return: scala value of IoU
+    """
+    # cx1 = rec1[0]
+    # cy1 = rec1[1]
+    # cx2 = rec1[2]
+    # cy2 = rec1[3]
+    # gx1 = rec2[0]
+    # gy1 = rec2[1]
+    # gx2 = rec2[2]
+    # gy2 = rec2[3]
+    cx1, cy1, cx2, cy2 = rec1
+    gx1, gy1, gx2, gy2 = rec2
+    # 计算每个矩形的面积
+    S_rec1 = (cx2 - cx1) * (cy2 - cy1)  # C的面积
+    S_rec2 = (gx2 - gx1) * (gy2 - gy1)  # G的面积
+
+    # 计算相交矩形
+    x1 = max(cx1, gx1)
+    y1 = max(cy1, gy1)
+    x2 = min(cx2, gx2)
+    y2 = min(cy2, gy2)
+
+    w = max(0, x2 - x1)
+    h = max(0, y2 - y1)
+    area = w * h  # C∩G的面积
+
+    iou = area / (S_rec1 + S_rec2 - area)
+    return iou
+
+
+if __name__ == '__main__':
+    rect1 = (661, 27, 679, 47)
+    # (top, left, bottom, right)
+    rect2 = (662, 27, 682, 47)
+    iou = calIOU_V1(rect1, rect2)
+    print(iou)
+    
+```
